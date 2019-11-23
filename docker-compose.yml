@@ -1,0 +1,103 @@
+# Use postgres/example user/password credentials
+version: '3.7'
+
+services:
+  db:
+    image: postgres:12.1
+    restart: always
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin 
+      POSTGRES_DB: sonarqube
+    volumes:
+      - sonar-postgres-db:/var/lib/postgresql/data
+    # expose:
+    #   - "5432"
+    # deploy:
+    #   restart_policy:
+    #     condition: on-failure
+    #     delay: 5s
+    #     max_attempts: 3
+    #     window: 120s
+    networks:
+      sonarqube:
+        aliases:
+        # 定义一个别名，供下方sonarqube使用
+         - postgres
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - 8080:8080
+    depends_on:
+      - db
+    networks:
+      - sonarqube
+  sonarqube:
+    image: sonarqube:8.0-community-beta
+    restart: always
+    depends_on:
+      - db
+    ports:
+      - 9000:9000
+    environment:
+      - sonar.jdbc.username=admin
+      - sonar.jdbc.password=admin
+      - sonar.jdbc.url=jdbc:postgresql://postgres/sonarqube?currentSchema=public
+    volumes:
+      - sonar-config:/opt/sonarqube/conf  
+      - sonar-extensions:/opt/sonarqube/extensions
+      - sonar-logs:/opt/sonarqube/logs
+      - sonar-data:/opt/sonarqube/data
+      - sonar-sq-extensions:/opt/sq/extensions
+    networks:
+      - sonarqube
+  visualizer:
+    image: dockersamples/visualizer
+    stop_grace_period: 1m30s
+    ports:
+      - 8081:8080
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    deploy:
+      placement:
+        constraints: [node.role == manager]      
+    networks:
+      overlay:
+      sonarqube:         
+  gitlab: 
+    image: gitlab/gitlab-ce:12.4.2-ce.0
+    hostname: gitlab.hanlyjiang.cn
+    ports:
+        - 443:443
+        - 80:80
+        - 22:22
+    volumes:
+      - gitlab-config:/etc/gitlab
+      - gitlab-logs:/var/log/gitlab
+      - gitlab-data:/var/opt/gitlab
+    networks:
+      overlay:
+      # sonarqube:
+    # docker-compose 忽略deploy
+    deploy:
+      placement:
+        constraints:
+          - node.labels.level == high
+
+# define named volumes
+volumes:
+  sonar-postgres-db:
+  sonar-config:
+  sonar-extensions:
+  sonar-logs:
+  sonar-data:
+  sonar-sq-extensions:
+  gitlab-config:
+  gitlab-logs:
+  gitlab-data:
+
+networks:
+  overlay:
+  sonarqube:
+  
